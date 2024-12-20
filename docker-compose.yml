@@ -1,0 +1,176 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend
+
+  # Auth Service Database
+  auth_db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build: ./services/auth
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:12345@auth_db:5432/auth_db
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      ETHEREAL_HOST: "${ETHEREAL_HOST}"
+      ETHEREAL_PORT: "${ETHEREAL_PORT}"
+      ETHEREAL_USER: "${ETHEREAL_USER}"
+      ETHEREAL_PASS: "${ETHEREAL_PASS}"
+    depends_on:
+      - auth_db
+      - rabbitmq
+    volumes:
+      - ./services/auth/alembic:/app/alembic  # Монтирование всей директории alembic
+    ports:
+      - "8000:8000"  # Проброс порта для доступа к сервису auth
+    networks:
+      - backend
+
+  # Product Service Database
+  product_db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: product_db
+    volumes:
+      - product_db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  product:
+    build: ./services/product
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:12345@product_db:5432/product_db
+      JWT_SECRET_KEY: "M-hfvCFPFLMNY9gwd6sIU6PzECWV7liBviEWwoF6lXU"
+    depends_on:
+      - product_db
+      - rabbitmq
+      - auth
+    networks:
+      - backend
+    volumes:
+      - ./services/product/alembic:/app/alembic  # Монтирование всей директории alembic
+    ports:
+      - "8003:8000"  # Проброс порта для доступа к сервису product:8000"
+
+  # Order Service Database
+  order_db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: order_db
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  order:
+    build: ./services/order
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:12345@order_db:5432/order_db
+      JWT_SECRET_KEY: "M-hfvCFPFLMNY9gwd6sIU6PzECWV7liBviEWwoF6lXU"
+    depends_on:
+      - order_db
+      - rabbitmq
+      - auth
+      - product
+    volumes:
+      - ./services/order/alembic:/app/alembic  # Монтирование всей директории alembic
+    ports:
+      - "8001:8000"  # Проброс порта для доступа к сервису auth
+    networks:
+      - backend
+
+  # Payment Service Database
+  payment_db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: payment_db
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  payment:
+    build: ./services/payment
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:12345@payment_db:5432/payment_db
+      JWT_SECRET_KEY: "M-hfvCFPFLMNY9gwd6sIU6PzECWV7liBviEWwoF6lXU"
+    depends_on:
+      - payment_db
+      - rabbitmq
+      - order
+    volumes:
+      - ./services/payment/alembic:/app/alembic  # Монтирование всей директории alembic
+    ports:
+      - "8002:8000"  # Проброс порта для доступа к сервису auth
+    networks:
+      - backend
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      - auth
+      - product
+      - order
+      - payment
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+volumes:
+  auth_db_data:
+  product_db_data:
+  payment_db_data:
+  order_db_data:

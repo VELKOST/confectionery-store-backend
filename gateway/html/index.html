@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Каталог продуктов</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/products.js"></script>
+</head>
+<body>
+<h1>Каталог продуктов</h1>
+<div id="menu">
+    <a href="/cart.html">Корзина</a> |
+    <a href="/orders.html">Мои заказы</a> |
+    <a href="/admin.html" id="adminLink" style="display:none">Админка</a>
+    <span id="authBlock"></span>
+</div>
+<div id="productList"></div>
+
+<script>
+(async function(){
+    // Проверяем роль пользователя
+    await loadUserInfo();
+    const role = localStorage.getItem('user_role');
+    if (role === 'admin' || role === 'seller') {
+        document.getElementById('adminLink').style.display = 'inline';
+    }
+
+    // Отображаем кнопку выхода или логина
+    const authBlock = document.getElementById('authBlock');
+    if (localStorage.getItem('token')) {
+        authBlock.innerHTML = `<span>Привет, ${localStorage.getItem('user_name')}! </span><button onclick="logout()">Выйти</button>`;
+    } else {
+        authBlock.innerHTML = `<a href="/login.html">Войти</a> | <a href="/register.html">Регистрация</a>`;
+    }
+
+    // Загрузим продукты
+    try {
+        const products = await getProducts();
+        const productList = document.getElementById('productList');
+        if (products.length === 0) {
+            productList.innerHTML = '<p>Нет доступных продуктов.</p>';
+            return;
+        }
+        productList.innerHTML = products.map(p => `
+            <div class="product">
+                <h3>${p.name}</h3>
+                <p>Цена: ${p.price} руб.</p>
+                <p>${p.description || ''}</p>
+                <button onclick="addToCart(${p.id})">Добавить в корзину</button>
+            </div>
+        `).join('');
+    } catch (e) {
+        alert('Ошибка загрузки продуктов: ' + e.message);
+    }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Оформление заказа</title>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/products.js"></script>
+    <script src="js/cart.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<h1>Оформление заказа</h1>
+<form id="checkoutForm">
+    <label>Способ оплаты:
+        <select id="payment_method">
+            <option value="card">Карта</option>
+            <option value="cash">Наличные</option>
+        </select>
+    </label><br>
+    <button type="submit">Подтвердить заказ</button>
+</form>
+
+<script>
+document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!localStorage.getItem('token')) {
+        alert('Сначала войдите в систему');
+        return;
+    }
+    const user_id = localStorage.getItem('user_id');
+    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+    const products = await getProducts();
+    const productMap = {};
+    for (let p of products) {
+        productMap[p.id] = p;
+    }
+    let total = 0;
+    cart.forEach(item => {
+        const p = productMap[item.product_id];
+        total += p.price * item.quantity;
+    });
+
+    const orderData = {
+        user_id: parseInt(user_id),
+        items: cart,
+        total_price: total
+    };
+
+    const res = await apiPost('/order/orders', orderData);
+    alert('Заказ создан, ID: ' + res.order_id);
+
+    // Создадим платеж (по желанию)
+    const payment_method = document.getElementById('payment_method').value;
+    const paymentData = {
+        order_id: res.order_id,
+        amount: total,
+        payment_method: payment_method
+    };
+
+    const payRes = await apiPost('/payment/payments', paymentData);
+    alert('Платеж: ' + payRes.message + ', статус: ' + payRes.status);
+
+    localStorage.removeItem('cart');
+    window.location.href = '/orders.html';
+});
+</script>
+</body>
+</html>
