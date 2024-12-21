@@ -1,6 +1,6 @@
-// products.js
+// frontend/js/products.js
 async function getProducts() {
-    return apiGet('/product/products');
+    return apiGet('/products/');
 }
 
 function addToCart(productId) {

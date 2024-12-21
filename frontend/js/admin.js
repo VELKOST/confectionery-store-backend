@@ -28,7 +28,7 @@ async function loadAdminUI() {
 
 async function loadProductsForAdmin() {
     try {
-        const products = await apiGet('/product/products');
+        const products = await apiGet('/products/');
         const productList = document.getElementById('adminProductList');
         if (products.length === 0) {
             productList.innerHTML = '<tr><td colspan="7">Нет доступных продуктов.</td></tr>';
@@ -70,7 +70,7 @@ async function createProduct(name, price, category, description) {
         description,
         seller_id: parseInt(seller_id)
     };
-    await apiPost('/product/products', data);
+    await apiPost('/products/', data);
     loadProductsForAdmin();
 }
 
@@ -90,7 +90,7 @@ async function editProduct(id, oldName, oldPrice, oldCategory, oldDesc) {
     }
 
     try {
-        await apiPut(`/product/products/${id}`, {
+        await apiPut(`/products/${id}`, {
             name: name.trim(),
             price: parseFloat(price),
             category: category.trim(),
@@ -106,7 +106,7 @@ async function editProduct(id, oldName, oldPrice, oldCategory, oldDesc) {
 async function deleteProduct(id) {
     if (!confirm('Вы уверены, что хотите удалить этот продукт?')) return;
     try {
-        await apiDelete(`/product/products/${id}`);
+        await apiDelete(`/products/${id}`);
         alert('Продукт успешно удалён');
         loadProductsForAdmin();
     } catch (error) {

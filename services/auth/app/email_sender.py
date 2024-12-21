@@ -16,7 +16,7 @@ async def send_email(to_email: str, subject: str, html_content: str):
     message["From"] = ETHEREAL_USER
     message["To"] = to_email
     message["Subject"] = subject
-    message.set_content(html_content, subtype='html')
+    message.set_content(html_content, subtype='frontend')
 
     try:
         await aiosmtplib.send(

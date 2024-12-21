@@ -20,9 +20,9 @@ class ProductUpdate(ProductBase):
 class ProductResponse(BaseModel):
     id: int
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     price: float
-    category: Optional[str]
+    category: Optional[str] = None
     seller_id: int
 
     class Config:

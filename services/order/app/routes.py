@@ -1,3 +1,4 @@
+# order/routes.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
@@ -17,6 +18,9 @@ router = APIRouter()
 
 @router.get("/orders/me", response_model=List[OrderListItem])
 def get_orders_for_user(user=Depends(get_current_user_token), db: Session = Depends(get_db)):
+    """
+    Эндпоинт для получения заказов текущего пользователя.
+    """
     orders = db.query(Order).filter(Order.user_id == user["user_id"]).all()
 
     # Создаём вручную объекты OrderListItem
@@ -103,20 +107,49 @@ def list_orders(
         user=Depends(get_current_user_token),
         db: Session = Depends(get_db)
 ):
-    # Только admin может получить список всех заказов
-    if user["role"] != "admin":
-        raise HTTPException(status_code=401, detail="Only admin can view all orders")
+    """
+    Эндпоинт для получения списка заказов.
+    - Для `admin` возвращает все заказы.
+    - Для `seller` возвращает заказы, содержащие их продукты.
+    """
+    if user["role"] == "admin":
+        orders = db.query(Order).all()
+    elif user["role"] == "seller":
+        seller_id = user["user_id"]
+        # Получаем все заказы
+        all_orders = db.query(Order).all()
+        filtered_orders = []
+        seen_order_ids = set()
+        for order in all_orders:
+            if order.id in seen_order_ids:
+                continue  # Уже добавлен
+            for item in order.items:
+                try:
+                    product_info = get_product_info(item.product_id)
+                    if product_info.get("seller_id") == seller_id:
+                        filtered_orders.append(order)
+                        seen_order_ids.add(order.id)
+                        break  # Не нужно проверять остальные товары в этом заказе
+                except HTTPException as e:
+                    # Логировать ошибку и продолжить
+                    logger.error(f"Error fetching product info for product_id {item.product_id}: {e.detail}")
+                    continue
+        orders = filtered_orders
+    else:
+        raise HTTPException(status_code=401, detail="Only admin and seller can view orders")
 
-    orders = db.query(Order).all()
-    response = []
-    for o in orders:
-        response.append({
-            "order_id": o.id,
-            "status": o.status,
-            "total_price": o.total_price,
-            "created_at": o.created_at
-        })
-    return response
+    # Создаём список OrderListItem
+    order_list = [
+        OrderListItem(
+            order_id=order.id,
+            status=order.status,
+            total_price=order.total_price,
+            created_at=order.created_at
+        )
+        for order in orders
+    ]
+
+    return order_list
 
 
 @router.get("/orders/{order_id}", response_model=OrderResponse)
@@ -133,8 +166,26 @@ def get_order(
     if user["role"] == "user" and order.user_id != user["user_id"]:
         raise HTTPException(status_code=403, detail="You cannot view this order")
 
+    # Если user - seller, проверить, что заказ содержит их продукты
+    if user["role"] == "seller":
+        has_own_product = False
+        for item in order.items:
+            try:
+                product_info = get_product_info(item.product_id)
+                if product_info.get("seller_id") == user["user_id"]:
+                    has_own_product = True
+                    break
+            except HTTPException as e:
+                # Логировать ошибку и продолжить
+                logger.error(f"Error fetching product info for product_id {item.product_id}: {e.detail}")
+                continue
+        if not has_own_product:
+            raise HTTPException(status_code=403, detail="You cannot view this order")
+
     # admin может видеть любой заказ
-    # (если появится роль seller, можно добавить логику, но не указано в задаче)
+    # 'user' может видеть только свои заказы
+    # 'seller' может видеть заказы с их продуктами
+
     items = []
     for i in order.items:
         items.append(OrderItemResponse(
@@ -175,4 +226,3 @@ def update_order_status(
     order.status = status_data.status
     db.commit()
     return {"message": "Order status updated successfully"}
-
